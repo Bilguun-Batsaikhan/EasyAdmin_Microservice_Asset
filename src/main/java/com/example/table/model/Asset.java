@@ -2,6 +2,7 @@ package com.example.table.model;
 
 import com.example.table.enumeration.AssetStatus;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -27,6 +28,7 @@ public class Asset {
     private String type;
 
     @Enumerated(EnumType.STRING)
+    @NotNull
     @Column(name = "status")
     private AssetStatus status;
 
