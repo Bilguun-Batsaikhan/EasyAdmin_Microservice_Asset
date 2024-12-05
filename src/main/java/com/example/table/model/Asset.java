@@ -1,34 +1,40 @@
 package com.example.table.model;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import com.example.table.enumeration.AssetStatus;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+
+import java.math.BigDecimal;
 
 @Entity
 @Table(name = "assets")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+
+//TODO: add validations not blank etc...
 public class Asset {
     @Id
-    private int id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-    @Column(name = "model_name")
+    @Column(name = "name")
     private String modelName;
 
     @Column(name = "type")
     private String type;
 
+    @Enumerated(EnumType.STRING)
+    @NotNull
     @Column(name = "status")
-    private String status;
+    private AssetStatus status;
 
     @Column(name = "cost")
-    private double cost;
+    private BigDecimal cost;
 
-    @Column(name = "assigned_to")
-    private String assignedTo;
+    @Column(name = "user_id")
+    private Long userID;
 }
