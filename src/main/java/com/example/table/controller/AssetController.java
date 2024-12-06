@@ -39,7 +39,7 @@ public class AssetController {
         return assetService.getAllAssets();
     }
 
-    @PostMapping()
+    @PostMapping
     public Asset createAsset(@Valid @RequestBody Asset asset) {
         EnumSet<UserRoleEnum> authorizedRoles = EnumSet.of(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.SYSTEM_ADMIN);
         if (!authorizationService.isAuthorized(requestContext, authorizedRoles)) {
