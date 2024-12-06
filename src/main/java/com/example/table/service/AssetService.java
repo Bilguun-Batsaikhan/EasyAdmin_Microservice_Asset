@@ -46,22 +46,6 @@ public class AssetService {
         return assetRepository.save(asset);
     }
 
-    /*STATUS has only 3 values AVAILABLE, UNAVAILABLE, ASSIGNED.
-1. When only modifying status:
-- AVAILABLE/UNAVAILABLE the user_id must become null
-- if it is ASSIGNED then that means user_id must become not null in some way, since we're only modifying status and not the user this should just throw an exception.
-2. When only modifying user_id:
--if status is ASSIGNED then that shouldn't be a problem since that means the previous user is no longer the owner.
--if status is AVAILABLE we assume that user_id is also null (but just in case maybe check and if not the case throw an exception) and we just assign the user.
--if status is UNAVAILABLE we can't assign the user throw an exception
-3. When both user_id and status fields are given for patch call, this is the difficult part. I need to verify if these two fields are present in the updates in some way then I need to think the conditions.
-- AVAILABLE + user_id CONTRADICTION asset cannot be available and be assigned. If we want to be strict about it let's just throw an error
-- ASSIGNED + user_id NO PROBLEM
-- UNAVAILABLE + user_id CONTRADICTION asset cannot unavailable and be assigned. If we want to be strict about it let's just throw an error
-- AVAILABLE + null NO PROBLEM
-- ASSIGNED + null CONTRADICTION
-- UNAVAILABLE + null NO PROBLEM
-*/
     public Asset updateAsset(Long id, Map<String, ?> updates) {
         Optional<Asset> optionalAsset = assetRepository.findById(id);
         if (optionalAsset.isEmpty()) {
