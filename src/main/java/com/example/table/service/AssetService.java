@@ -1,5 +1,6 @@
 package com.example.table.service;
 
+import com.example.table.dto.AssetResPagination;
 import com.example.table.enumeration.AssetFieldNameUpdateEnum;
 import com.example.table.enumeration.AssetStatus;
 import com.example.table.enumeration.HttpResponseEnum;
@@ -7,6 +8,9 @@ import com.example.table.exception.FailureException;
 import com.example.table.model.Asset;
 import com.example.table.repository.AssetRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -25,9 +29,20 @@ public class AssetService {
         this.assetRepository = assetRepository;
     }
 
-    public List<Asset> getAllAssets() {
-        List<Asset> assets = assetRepository.findAll();
-        return assets;
+    public AssetResPagination getAllAssets(int pageNo, int pageSize) {
+        Pageable pagebale = PageRequest.of(pageNo, pageSize);
+        Page<Asset> pagedAssets = assetRepository.findAll(pagebale);
+        List<Asset> assets = pagedAssets.getContent();
+        AssetResPagination assetResPagination = new AssetResPagination();
+
+        assetResPagination.setPageNo(pageNo);
+        assetResPagination.setPageSize(pageSize);
+        assetResPagination.setTotalElements(assetRepository.count());
+        assetResPagination.setTotalPages(pagedAssets.getTotalPages());
+        assetResPagination.setLast(pagedAssets.isLast());
+        assetResPagination.setData(assets);
+
+        return assetResPagination;
     }
 
     public Asset createAsset(Asset asset) {
