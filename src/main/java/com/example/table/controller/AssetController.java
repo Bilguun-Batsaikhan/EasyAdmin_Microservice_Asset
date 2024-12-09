@@ -37,10 +37,12 @@ public class AssetController {
     public ResponseEntity<AssetResPagination> getAllAssets(@RequestParam(value = "page", defaultValue = "0", required = false) int pageNo,
                                                            @RequestParam(value = "pageSize", defaultValue = "10", required = false) int pageSize) {
         EnumSet<UserRoleEnum> authorizedRoles = EnumSet.of(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.SYSTEM_ADMIN);
-        if (!authorizationService.isAuthorized(requestContext, authorizedRoles)) {
-            throw new FailureException(HttpResponseEnum.FORBIDDEN);
+        if (authorizationService.isAuthorized(requestContext, authorizedRoles)) {
+            return new ResponseEntity<>(assetService.getAllAssets(pageNo, pageSize), HttpStatus.OK);
+        } else {
+            Long userId = requestContext.getUserID();
+            return new ResponseEntity<>(assetService.getAllUserAssets(userId, pageNo, pageSize), HttpStatus.OK);
         }
-        return new ResponseEntity<>(assetService.getAllAssets(pageNo, pageSize), HttpStatus.OK);
     }
 
     @PostMapping

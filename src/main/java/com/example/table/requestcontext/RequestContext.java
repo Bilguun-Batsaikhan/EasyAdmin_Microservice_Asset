@@ -17,4 +17,5 @@ import org.springframework.web.context.WebApplicationContext;
 public class RequestContext {
     String accessToken;
     UserRoleEnum role;
+    Long userID;
 }
