@@ -14,10 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 public class AssetService {
@@ -60,6 +57,26 @@ public class AssetService {
             }
         }
         return assetRepository.save(asset);
+    }
+    //When batch updating, it might give SQL error if foreign key constraint fails
+    public List<Asset> createAssets(List<Asset> assets) {
+        List<Asset> newAssets = new ArrayList<>();
+        for (Asset asset : assets) {
+            if (asset.getUserID() != null) {
+                if (asset.getStatus() == AssetStatus.UNAVAILABLE) {
+                    throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                            "Asset cannot have a user assigned when status is UNAVAILABLE");
+                }
+                asset.setStatus(AssetStatus.ASSIGNED);
+            } else {
+                if (asset.getStatus() == AssetStatus.ASSIGNED) {
+                    throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                            "Asset must have a user assigned when status is ASSIGNED");
+                }
+            }
+            newAssets.add(asset);
+        }
+        return assetRepository.saveAll(newAssets);
     }
 
     public Asset updateAsset(Long id, Map<String, ?> updates) {

@@ -53,6 +53,16 @@ public class AssetController {
         return new ResponseEntity<>(createdAsset, HttpStatus.CREATED);
     }
 
+    @PostMapping("/batch")
+    public ResponseEntity<List<Asset>> createAssets(@Valid @RequestBody List<Asset> assets) {
+        EnumSet<UserRoleEnum> authorizedRoles = EnumSet.of(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.SYSTEM_ADMIN);
+        if (!authorizationService.isAuthorized(requestContext, authorizedRoles)) {
+            throw new FailureException(HttpResponseEnum.FORBIDDEN);
+        }
+        List<Asset> createdAssets = assetService.createAssets(assets);
+        return new ResponseEntity<>(createdAssets, HttpStatus.CREATED);
+    }
+
     @PatchMapping("/{id}")
     public ResponseEntity<Asset> updateAsset(@Valid @PathVariable Long id, @RequestBody Map<String, Object> updates) {
         EnumSet<UserRoleEnum> authorizedRoles = EnumSet.of(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.SYSTEM_ADMIN);
