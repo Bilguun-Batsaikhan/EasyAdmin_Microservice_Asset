@@ -53,8 +53,10 @@ public class JWTAuthorizationFilter extends OncePerRequestFilter {
         try {
             jwtService.validateAccessToken(accessToken); // Validate token
             String role = jwtService.getClaimFromAccessToken(accessToken, "role", String.class);
+            Long userID = jwtService.getClaimFromAccessToken(accessToken, "id_user", Long.class);
             requestContext.setRole(UserRoleEnum.valueOf(role));
             requestContext.setAccessToken(accessToken);
+            requestContext.setUserID(userID);
         } catch (FailureException e) {
             if (isTokenRefreshRequest(e, request)) {
                 filterChain.doFilter(request, response);

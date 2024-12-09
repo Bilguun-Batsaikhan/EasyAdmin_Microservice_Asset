@@ -42,6 +42,22 @@ public class AssetService {
         return assetResPagination;
     }
 
+    public AssetResPagination getAllUserAssets(Long userId, int pageNo, int pageSize) {
+        Pageable pagebale = PageRequest.of(pageNo, pageSize);
+        Page<Asset> pagedAssets = assetRepository.findAssetsByUserID(userId, pagebale);
+        List<Asset> assets = pagedAssets.getContent();
+        AssetResPagination assetResPagination = new AssetResPagination();
+
+        assetResPagination.setPageNo(pageNo);
+        assetResPagination.setPageSize(pageSize);
+        assetResPagination.setTotalElements(assetRepository.count());
+        assetResPagination.setTotalPages(pagedAssets.getTotalPages());
+        assetResPagination.setLast(pagedAssets.isLast());
+        assetResPagination.setData(assets);
+
+        return assetResPagination;
+    }
+
     public Asset createAsset(Asset asset) {
         if (asset.getUserID() != null) {
             if(asset.getStatus() == AssetStatus.UNAVAILABLE) {
