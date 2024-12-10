@@ -15,7 +15,6 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 
-//TODO: add validations not blank etc...
 public class Asset {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

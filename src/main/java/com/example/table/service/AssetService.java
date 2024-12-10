@@ -1,29 +1,37 @@
 package com.example.table.service;
 
 import com.example.table.dto.AssetResPagination;
+import com.example.table.enumeration.AssetAction;
 import com.example.table.enumeration.AssetFieldNameUpdateEnum;
 import com.example.table.enumeration.AssetStatus;
 import com.example.table.enumeration.HttpResponseEnum;
 import com.example.table.exception.FailureException;
 import com.example.table.model.Asset;
+import com.example.table.model.AssetHistory;
+import com.example.table.repository.AssetHistoryRepository;
 import com.example.table.repository.AssetRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.example.table.requestcontext.RequestContext;
+import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
 public class AssetService {
 
     private final AssetRepository assetRepository;
-
-    @Autowired
-    public AssetService(AssetRepository assetRepository) {
+    private final AssetHistoryRepository assetHistoryRepository;
+    private final RequestContext requestContext;
+    private static final String INVALID_INPUT = "Asset cannot have a user assigned when status is UNAVAILABLE";
+    public AssetService(AssetRepository assetRepository, AssetHistoryRepository assetHistoryRepository, RequestContext requestContext) {
         this.assetRepository = assetRepository;
+        this.assetHistoryRepository = assetHistoryRepository;
+        this.requestContext = requestContext;
     }
 
     public AssetResPagination getAllAssets(int pageNo, int pageSize) {
@@ -62,7 +70,7 @@ public class AssetService {
         if (asset.getUserID() != null) {
             if(asset.getStatus() == AssetStatus.UNAVAILABLE) {
                 throw new FailureException(HttpResponseEnum.INVALID_INPUT,
-                        "Asset cannot have a user assigned when status is UNAVAILABLE");
+                        INVALID_INPUT);
             }
             // Asset might've created with status AVAILABLE, but user is assigned
             asset.setStatus(AssetStatus.ASSIGNED);
@@ -72,7 +80,11 @@ public class AssetService {
                         "Asset must have a user assigned when status is ASSIGNED");
             }
         }
-        return assetRepository.save(asset);
+
+        Asset createdAsset = assetRepository.save(asset);
+
+        logAssetHistory(createdAsset, null, AssetAction.CREATED, "Asset created");
+        return createdAsset;
     }
     //When batch updating, it might give SQL error if foreign key constraint fails
     public List<Asset> createAssets(List<Asset> assets) {
@@ -81,7 +93,7 @@ public class AssetService {
             if (asset.getUserID() != null) {
                 if (asset.getStatus() == AssetStatus.UNAVAILABLE) {
                     throw new FailureException(HttpResponseEnum.INVALID_INPUT,
-                            "Asset cannot have a user assigned when status is UNAVAILABLE");
+                            INVALID_INPUT);
                 }
                 asset.setStatus(AssetStatus.ASSIGNED);
             } else {
@@ -92,20 +104,26 @@ public class AssetService {
             }
             newAssets.add(asset);
         }
-        return assetRepository.saveAll(newAssets);
+        List<Asset> savedAssets = assetRepository.saveAll(newAssets);
+        for (Asset savedAsset : savedAssets) {
+            logAssetHistory(savedAsset, null, AssetAction.CREATED, "Asset created");
+        }
+        return savedAssets;
     }
 
     public Asset updateAsset(Long id, Map<String, ?> updates) {
         Optional<Asset> optionalAsset = assetRepository.findById(id);
         if (optionalAsset.isEmpty()) {
-            return null;
+            throw new FailureException(HttpResponseEnum.RESOURCE_NOT_FOUND, "Asset not found");
         }
 
         Asset asset = optionalAsset.get();
+        Asset previousState = new Asset(); // Clone asset state for history logging
+        BeanUtils.copyProperties(asset, previousState);
+
         String statusUpdate = null;
         Long userIdUpdate = null;
 
-        // Parse and validate updates
         for (Map.Entry<String, ?> entry : updates.entrySet()) {
             AssetFieldNameUpdateEnum fieldEnum = Arrays.stream(AssetFieldNameUpdateEnum.values())
                     .filter(enumValue -> enumValue.getFieldName().equals(entry.getKey()))
@@ -125,17 +143,14 @@ public class AssetService {
                         }
                         break;
                     default:
-                        // Process other fields
                         applyFieldUpdate(asset, fieldEnum, entry.getValue());
                         break;
                 }
             }
         }
 
-        // Validate the logic for status and user_id updates
         validateAssetUpdates(asset, statusUpdate, userIdUpdate);
 
-        // Apply updates if valid
         if (statusUpdate != null) {
             asset.setStatus(AssetStatus.valueOf(statusUpdate));
         }
@@ -143,9 +158,11 @@ public class AssetService {
             asset.setUserID(userIdUpdate);
         }
 
-        assetRepository.save(asset);
-        return asset;
+        Asset updatedAsset = assetRepository.save(asset);
+        logAssetHistory(updatedAsset, previousState, AssetAction.UPDATED, "Asset updated");
+        return updatedAsset;
     }
+
 
     private void validateAssetUpdates(Asset asset, String statusUpdate, Long userIdUpdate) {
         if (statusUpdate != null && userIdUpdate != null) {
@@ -197,7 +214,7 @@ public class AssetService {
                 break;
             case UNAVAILABLE:
                 throw new FailureException(HttpResponseEnum.INVALID_INPUT,
-                        "Asset cannot have a user assigned when status is UNAVAILABLE");
+                        INVALID_INPUT);
             case ASSIGNED:
                 // No issue if assigning a new user
                 break;
@@ -223,13 +240,35 @@ public class AssetService {
         }
     }
 
-
     public Asset removeAsset(Long id) {
-        Asset asset = assetRepository.findById(id).orElse(null);
-        if (asset != null) {
-            assetRepository.delete(asset);
+        Optional<Asset> optionalAsset = assetRepository.findById(id);
+        if (optionalAsset.isEmpty()) {
+            throw new FailureException(HttpResponseEnum.RESOURCE_NOT_FOUND, "Asset not found");
         }
+
+        Asset asset = optionalAsset.get();
+        assetRepository.delete(asset);
+
+        logAssetHistory(asset, null, AssetAction.DELETED, "Asset deleted");
         return asset;
+    }
+
+
+    private void logAssetHistory(Asset currentAsset, Asset previousAsset, AssetAction action, String comment) {
+        AssetHistory history = new AssetHistory();
+        history.setAssetId(currentAsset.getId());
+        history.setAdminId(requestContext.getUserID());
+        history.setUserId(currentAsset.getUserID());
+        history.setStatus(currentAsset.getStatus());
+        history.setAction(action);
+        history.setDate(LocalDateTime.now());
+        history.setComment(comment);
+
+        if (action == AssetAction.UPDATED && previousAsset != null) {
+            history.setComment(comment + " - Previous status: " + previousAsset.getStatus());
+        }
+
+        assetHistoryRepository.save(history);
     }
 }
 
