@@ -1,0 +1,274 @@
+package com.certimeter.asset.service;
+
+import com.certimeter.asset.dto.AssetResPagination;
+import com.certimeter.asset.enumeration.AssetAction;
+import com.certimeter.asset.enumeration.AssetFieldNameUpdateEnum;
+import com.certimeter.asset.enumeration.AssetStatus;
+import com.certimeter.asset.enumeration.HttpResponseEnum;
+import com.certimeter.asset.exception.FailureException;
+import com.certimeter.asset.model.Asset;
+import com.certimeter.asset.model.AssetHistory;
+import com.certimeter.asset.repository.AssetHistoryRepository;
+import com.certimeter.asset.repository.AssetRepository;
+import com.certimeter.asset.requestcontext.RequestContext;
+import org.springframework.beans.BeanUtils;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.*;
+
+@Service
+public class AssetService {
+
+    private final AssetRepository assetRepository;
+    private final AssetHistoryRepository assetHistoryRepository;
+    private final RequestContext requestContext;
+    private static final String INVALID_INPUT = "Asset cannot have a user assigned when status is UNAVAILABLE";
+    public AssetService(AssetRepository assetRepository, AssetHistoryRepository assetHistoryRepository, RequestContext requestContext) {
+        this.assetRepository = assetRepository;
+        this.assetHistoryRepository = assetHistoryRepository;
+        this.requestContext = requestContext;
+    }
+
+    public AssetResPagination getAllAssets(int pageNo, int pageSize) {
+        Pageable pagebale = PageRequest.of(pageNo, pageSize);
+        Page<Asset> pagedAssets = assetRepository.findAll(pagebale);
+        List<Asset> assets = pagedAssets.getContent();
+        AssetResPagination assetResPagination = new AssetResPagination();
+
+        assetResPagination.setPageNo(pageNo);
+        assetResPagination.setPageSize(pageSize);
+        assetResPagination.setTotalElements(assetRepository.count());
+        assetResPagination.setTotalPages(pagedAssets.getTotalPages());
+        assetResPagination.setLast(pagedAssets.isLast());
+        assetResPagination.setData(assets);
+
+        return assetResPagination;
+    }
+
+    public AssetResPagination getAllUserAssets(Long userId, int pageNo, int pageSize) {
+        Pageable pagebale = PageRequest.of(pageNo, pageSize);
+        Page<Asset> pagedAssets = assetRepository.findAssetsByUserID(userId, pagebale);
+        List<Asset> assets = pagedAssets.getContent();
+        AssetResPagination assetResPagination = new AssetResPagination();
+
+        assetResPagination.setPageNo(pageNo);
+        assetResPagination.setPageSize(pageSize);
+        assetResPagination.setTotalElements(assetRepository.count());
+        assetResPagination.setTotalPages(pagedAssets.getTotalPages());
+        assetResPagination.setLast(pagedAssets.isLast());
+        assetResPagination.setData(assets);
+
+        return assetResPagination;
+    }
+
+    public Asset createAsset(Asset asset) {
+        if (asset.getUserID() != null) {
+            if(asset.getStatus() == AssetStatus.UNAVAILABLE) {
+                throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                        INVALID_INPUT);
+            }
+            // Asset might've created with status AVAILABLE, but user is assigned
+            asset.setStatus(AssetStatus.ASSIGNED);
+        } else {
+            if(asset.getStatus() == AssetStatus.ASSIGNED) {
+                throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                        "Asset must have a user assigned when status is ASSIGNED");
+            }
+        }
+
+        Asset createdAsset = assetRepository.save(asset);
+
+        logAssetHistory(createdAsset, null, AssetAction.CREATED, "Asset created");
+        return createdAsset;
+    }
+    //When batch updating, it might give SQL error if foreign key constraint fails
+    public List<Asset> createAssets(List<Asset> assets) {
+        List<Asset> newAssets = new ArrayList<>();
+        for (Asset asset : assets) {
+            if (asset.getUserID() != null) {
+                if (asset.getStatus() == AssetStatus.UNAVAILABLE) {
+                    throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                            INVALID_INPUT);
+                }
+                asset.setStatus(AssetStatus.ASSIGNED);
+            } else {
+                if (asset.getStatus() == AssetStatus.ASSIGNED) {
+                    throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                            "Asset must have a user assigned when status is ASSIGNED");
+                }
+            }
+            newAssets.add(asset);
+        }
+        List<Asset> savedAssets = assetRepository.saveAll(newAssets);
+        for (Asset savedAsset : savedAssets) {
+            logAssetHistory(savedAsset, null, AssetAction.CREATED, "Asset created");
+        }
+        return savedAssets;
+    }
+
+    public Asset updateAsset(Long id, Map<String, ?> updates) {
+        Optional<Asset> optionalAsset = assetRepository.findById(id);
+        if (optionalAsset.isEmpty()) {
+            throw new FailureException(HttpResponseEnum.RESOURCE_NOT_FOUND, "Asset not found");
+        }
+
+        Asset asset = optionalAsset.get();
+        Asset previousState = new Asset(); // Clone asset state for history logging
+        BeanUtils.copyProperties(asset, previousState);
+
+        String statusUpdate = null;
+        Long userIdUpdate = null;
+
+        for (Map.Entry<String, ?> entry : updates.entrySet()) {
+            AssetFieldNameUpdateEnum fieldEnum = Arrays.stream(AssetFieldNameUpdateEnum.values())
+                    .filter(enumValue -> enumValue.getFieldName().equals(entry.getKey()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (fieldEnum != null) {
+                switch (fieldEnum) {
+                    case STATUS:
+                        if (entry.getValue() instanceof String statusValue) {
+                            statusUpdate = statusValue;
+                        }
+                        break;
+                    case USER_ID:
+                        if (entry.getValue() instanceof Number numberValue) {
+                            userIdUpdate = numberValue.longValue();
+                        }
+                        break;
+                    default:
+                        applyFieldUpdate(asset, fieldEnum, entry.getValue());
+                        break;
+                }
+            }
+        }
+
+        validateAssetUpdates(asset, statusUpdate, userIdUpdate);
+
+        if (statusUpdate != null) {
+            asset.setStatus(AssetStatus.valueOf(statusUpdate));
+        }
+        if (userIdUpdate != null) {
+            asset.setUserID(userIdUpdate);
+        }
+
+        Asset updatedAsset = assetRepository.save(asset);
+        logAssetHistory(updatedAsset, previousState, AssetAction.UPDATED, "Asset updated");
+        return updatedAsset;
+    }
+
+
+    private void validateAssetUpdates(Asset asset, String statusUpdate, Long userIdUpdate) {
+        if (statusUpdate != null && userIdUpdate != null) {
+            validateStatusAndUserIdCombination(statusUpdate);
+        } else if (statusUpdate != null) {
+            validateStatusChange(asset, statusUpdate);
+        } else if (userIdUpdate != null) {
+            validateUserIdChange(asset);
+        }
+    }
+
+    /*
+    * - AVAILABLE + user_id CONTRADICTION asset cannot be available and be assigned. If we want to be strict about it let's just throw an error
+- ASSIGNED + user_id NO PROBLEM
+- UNAVAILABLE + user_id CONTRADICTION asset cannot unavailable and be assigned. If we want to be strict about it let's just throw an error
+* */
+
+    // I know that user_id is not null
+    private void validateStatusAndUserIdCombination(String statusUpdate) {
+        if (AssetStatus.valueOf(statusUpdate) == AssetStatus.AVAILABLE || AssetStatus.valueOf(statusUpdate) == AssetStatus.UNAVAILABLE) {
+            throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                    "Asset cannot have a user assigned when it is " + statusUpdate);
+        }
+    }
+
+    /*
+    * - AVAILABLE/UNAVAILABLE the user_id must become null
+- if it is ASSIGNED then that means user_id must become not null in some way, since we're only modifying status and not the user this should just throw an exception.*/
+    private void validateStatusChange(Asset asset, String statusUpdate) {
+        if (AssetStatus.valueOf(statusUpdate) == AssetStatus.AVAILABLE || AssetStatus.valueOf(statusUpdate) == AssetStatus.UNAVAILABLE) {
+            asset.setUserID(null);
+        } else {
+            throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                    "Asset must have a user assigned, the user is: " + asset.getUserID());
+        }
+    }
+    /*
+    * When only modifying user_id:
+-if status is ASSIGNED then that shouldn't be a problem since that means the previous user is no longer the owner.
+-if status is AVAILABLE we assume that user_id is also null (but just in case maybe check and if not the case throw an exception) and we just assign the user.
+-if status is UNAVAILABLE we can't assign the user throw an exception*/
+    private void validateUserIdChange(Asset asset) {
+        switch (asset.getStatus()) {
+            case AVAILABLE:
+                if (asset.getUserID() != null) {
+                    throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                            "Asset is already assigned with status AVAILABLE, check DB consistency");
+                }
+                break;
+            case UNAVAILABLE:
+                throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                        INVALID_INPUT);
+            case ASSIGNED:
+                // No issue if assigning a new user
+                break;
+        }
+    }
+
+    private void applyFieldUpdate(Asset asset, AssetFieldNameUpdateEnum fieldEnum, Object value) {
+        switch (fieldEnum) {
+            case NAME:
+                asset.setModelName((String) value);
+                break;
+            case TYPE:
+                asset.setType((String) value);
+                break;
+            case PRICE:
+                if (value instanceof Number numberValue) {
+                    asset.setCost(BigDecimal.valueOf(numberValue.doubleValue()));
+                }
+                break;
+            default:
+                throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                        "Unsupported field: " + fieldEnum.name());
+        }
+    }
+
+    public Asset removeAsset(Long id) {
+        Optional<Asset> optionalAsset = assetRepository.findById(id);
+        if (optionalAsset.isEmpty()) {
+            throw new FailureException(HttpResponseEnum.RESOURCE_NOT_FOUND, "Asset not found");
+        }
+
+        Asset asset = optionalAsset.get();
+        assetRepository.delete(asset);
+
+        logAssetHistory(asset, null, AssetAction.DELETED, "Asset deleted");
+        return asset;
+    }
+
+
+    private void logAssetHistory(Asset currentAsset, Asset previousAsset, AssetAction action, String comment) {
+        AssetHistory history = new AssetHistory();
+        history.setAssetId(currentAsset.getId());
+        history.setAdminId(requestContext.getUserID());
+        history.setUserId(currentAsset.getUserID());
+        history.setStatus(currentAsset.getStatus());
+        history.setAction(action);
+        history.setDate(LocalDateTime.now());
+        history.setComment(comment);
+
+        if (action == AssetAction.UPDATED && previousAsset != null) {
+            history.setComment(comment + " - Previous status: " + previousAsset.getStatus());
+        }
+
+        assetHistoryRepository.save(history);
+    }
+}
+
