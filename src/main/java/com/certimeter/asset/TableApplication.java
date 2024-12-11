@@ -1,4 +1,4 @@
-package com.example.table;
+package com.certimeter.asset;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
