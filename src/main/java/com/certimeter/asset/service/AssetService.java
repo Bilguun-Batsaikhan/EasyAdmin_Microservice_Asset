@@ -58,7 +58,7 @@ public class AssetService {
 
         assetResPagination.setPageNo(pageNo);
         assetResPagination.setPageSize(pageSize);
-        assetResPagination.setTotalElements(assetRepository.count());
+        assetResPagination.setTotalElements(assetRepository.countByUserID(userId));
         assetResPagination.setTotalPages(pagedAssets.getTotalPages());
         assetResPagination.setLast(pagedAssets.isLast());
         assetResPagination.setData(assets);
@@ -128,7 +128,7 @@ public class AssetService {
             AssetFieldNameUpdateEnum fieldEnum = Arrays.stream(AssetFieldNameUpdateEnum.values())
                     .filter(enumValue -> enumValue.getFieldName().equals(entry.getKey()))
                     .findFirst()
-                    .orElse(null);
+                    .orElseThrow(() -> new FailureException(HttpResponseEnum.INVALID_INPUT, "Invalid field name"));
 
             if (fieldEnum != null) {
                 switch (fieldEnum) {
