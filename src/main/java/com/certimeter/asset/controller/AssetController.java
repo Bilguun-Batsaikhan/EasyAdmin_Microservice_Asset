@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/assets")
@@ -35,13 +36,22 @@ public class AssetController {
     //--------------------------//
     @GetMapping
     public ResponseEntity<AssetResPagination> getAllAssets(@RequestParam(value = "page", defaultValue = "0", required = false) int pageNo,
-                                                           @RequestParam(value = "pageSize", defaultValue = "10", required = false) int pageSize) {
+                                                           @RequestParam(value = "pageSize", defaultValue = "10", required = false) int pageSize, @RequestParam Optional<String> userID,
+                                                           @RequestParam Optional<String> userIDMatchMode,
+                                                           @RequestParam Optional<String> modelName,
+                                                           @RequestParam Optional<String> modelNameMatchMode,
+                                                           @RequestParam Optional<String> type,
+                                                           @RequestParam Optional<String> typeMatchMode,
+                                                           @RequestParam Optional<String> status,
+                                                           @RequestParam Optional<String> statusMatchMode,
+                                                           @RequestParam Optional<String> cost,
+                                                           @RequestParam Optional<String> costMatchMode) {
         EnumSet<UserRoleEnum> authorizedRoles = EnumSet.of(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.SYSTEM_ADMIN);
         if (authorizationService.isAuthorized(requestContext, authorizedRoles)) {
-            return new ResponseEntity<>(assetService.getAllAssets(pageNo, pageSize), HttpStatus.OK);
+            return new ResponseEntity<>(assetService.getAllAssets(pageNo, pageSize, userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode), HttpStatus.OK);
         } else {
             Long userId = requestContext.getUserID();
-            return new ResponseEntity<>(assetService.getAllUserAssets(userId, pageNo, pageSize), HttpStatus.OK);
+            return new ResponseEntity<>(assetService.getAllUserAssets(userId, pageNo, pageSize, userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode), HttpStatus.OK);
         }
     }
 

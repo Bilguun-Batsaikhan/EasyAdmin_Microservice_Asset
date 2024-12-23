@@ -1,20 +1,19 @@
 package com.certimeter.asset.service;
 
 import com.certimeter.asset.dto.AssetResPagination;
-import com.certimeter.asset.enumeration.AssetAction;
-import com.certimeter.asset.enumeration.AssetFieldNameUpdateEnum;
-import com.certimeter.asset.enumeration.AssetStatus;
-import com.certimeter.asset.enumeration.HttpResponseEnum;
+import com.certimeter.asset.enumeration.*;
 import com.certimeter.asset.exception.FailureException;
 import com.certimeter.asset.model.Asset;
 import com.certimeter.asset.model.AssetHistory;
 import com.certimeter.asset.repository.AssetHistoryRepository;
 import com.certimeter.asset.repository.AssetRepository;
+import com.certimeter.asset.repository.AssetSpecification;
 import com.certimeter.asset.requestcontext.RequestContext;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -34,36 +33,52 @@ public class AssetService {
         this.requestContext = requestContext;
     }
 
-    public AssetResPagination getAllAssets(int pageNo, int pageSize) {
+    public AssetResPagination getAllAssets(int pageNo, int pageSize, Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode) {
         Pageable pagebale = PageRequest.of(pageNo, pageSize);
-        Page<Asset> pagedAssets = assetRepository.findAll(pagebale);
-        List<Asset> assets = pagedAssets.getContent();
-        AssetResPagination assetResPagination = new AssetResPagination();
+        Specification<Asset> spec = buildAssetSpecifications(userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode);
+        Page<Asset> pagedAssets = assetRepository.findAll(spec, pagebale);
 
-        assetResPagination.setPageNo(pageNo);
-        assetResPagination.setPageSize(pageSize);
-        assetResPagination.setTotalElements(assetRepository.count());
-        assetResPagination.setTotalPages(pagedAssets.getTotalPages());
-        assetResPagination.setLast(pagedAssets.isLast());
-        assetResPagination.setData(assets);
-
-        return assetResPagination;
+        return buildAssetResPagination(pagedAssets, pagedAssets.getContent());
     }
 
-    public AssetResPagination getAllUserAssets(Long userId, int pageNo, int pageSize) {
+    public AssetResPagination getAllUserAssets(Long userId, int pageNo, int pageSize, Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode) {
         Pageable pagebale = PageRequest.of(pageNo, pageSize);
-        Page<Asset> pagedAssets = assetRepository.findAssetsByUserID(userId, pagebale);
-        List<Asset> assets = pagedAssets.getContent();
-        AssetResPagination assetResPagination = new AssetResPagination();
+        Specification<Asset> spec = buildAssetSpecifications(userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode);
 
-        assetResPagination.setPageNo(pageNo);
-        assetResPagination.setPageSize(pageSize);
-        assetResPagination.setTotalElements(assetRepository.countByUserID(userId));
-        assetResPagination.setTotalPages(pagedAssets.getTotalPages());
-        assetResPagination.setLast(pagedAssets.isLast());
-        assetResPagination.setData(assets);
+        Page<Asset> pagedAssets = assetRepository.findAll(spec, pagebale);
 
-        return assetResPagination;
+        return buildAssetResPagination(pagedAssets, pagedAssets.getContent());
+    }
+
+    private Specification<Asset> addSpecification(
+            Specification<Asset> spec, String field, Optional<String> value, Optional<String> matchModeStr) {
+
+        if (value.isPresent() && matchModeStr.isPresent()) {
+            MatchMode matchMode = getMatchModeFromString(matchModeStr.get());
+            return spec.and(AssetSpecification.matchMode(field, value.get(), matchMode));
+        }
+        return spec;
+    }
+
+    private AssetResPagination buildAssetResPagination(Page<Asset> pagedAsset, List<Asset> assets) {
+        return AssetResPagination.builder()
+                .pageNo(pagedAsset.getNumber())
+                .pageSize(pagedAsset.getSize())
+                .totalElements(pagedAsset.getTotalElements())
+                .totalPages(pagedAsset.getTotalPages())
+                .last(pagedAsset.isLast())
+                .data(assets)
+                .build();
+    }
+
+    private Specification<Asset> buildAssetSpecifications(Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode) {
+        Specification<Asset> spec = Specification.where(null);
+        spec = addSpecification(spec, "userID", userID, userIDMatchMode);
+        spec = addSpecification(spec, "modelName", modelName, modelNameMatchMode);
+        spec = addSpecification(spec, "type", type, typeMatchMode);
+        spec = addSpecification(spec, "status", status, statusMatchMode);
+        spec = addSpecification(spec, "cost", cost, costMatchMode);
+        return spec;
     }
 
     public Asset createAsset(Asset asset) {
@@ -138,7 +153,9 @@ public class AssetService {
                         }
                         break;
                     case USER_ID:
-                        if (entry.getValue() instanceof Number numberValue) {
+                        if (entry.getValue() instanceof String stringValue) {
+                            userIdUpdate = Long.valueOf(stringValue);
+                        } else if (entry.getValue() instanceof Number numberValue) {
                             userIdUpdate = numberValue.longValue();
                         }
                         break;
@@ -153,9 +170,14 @@ public class AssetService {
 
         if (statusUpdate != null) {
             asset.setStatus(AssetStatus.valueOf(statusUpdate));
+        } else {
+            asset.setStatus(AssetStatus.AVAILABLE);
         }
+
         if (userIdUpdate != null) {
             asset.setUserID(userIdUpdate);
+        } else {
+            asset.setUserID(null);
         }
 
         Asset updatedAsset = assetRepository.save(asset);
@@ -211,6 +233,7 @@ public class AssetService {
                     throw new FailureException(HttpResponseEnum.INVALID_INPUT,
                             "Asset is already assigned with status AVAILABLE, check DB consistency");
                 }
+                asset.setStatus(AssetStatus.ASSIGNED);
                 break;
             case UNAVAILABLE:
                 throw new FailureException(HttpResponseEnum.INVALID_INPUT,
@@ -269,6 +292,35 @@ public class AssetService {
         }
 
         assetHistoryRepository.save(history);
+    }
+    // this could be in a common shared library
+    private MatchMode getMatchModeFromString(String matchModeStr) {
+        switch (matchModeStr.toLowerCase()) {
+            case "startswith":
+                return MatchMode.STARTS_WITH;
+            case "contains":
+                return MatchMode.CONTAINS;
+            case "notcontains":
+                return MatchMode.NOT_CONTAINS;
+            case "endswith":
+                return MatchMode.ENDS_WITH;
+            case "equals":
+                return MatchMode.EQUALS;
+            case "notequals":
+                return MatchMode.NOT_EQUALS;
+            case "nofilter":
+                return MatchMode.NO_FILTER;
+            case "dateis":
+                return MatchMode.DATE_IS;
+            case "dateisnot":
+                return MatchMode.DATE_IS_NOT;
+            case "datebefore":
+                return MatchMode.DATE_BEFORE;
+            case "dateafter":
+                return MatchMode.DATE_AFTER;
+            default:
+                throw new IllegalArgumentException("Invalid match mode: " + matchModeStr);
+        }
     }
 }
 
