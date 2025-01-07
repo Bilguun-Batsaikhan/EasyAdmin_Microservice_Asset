@@ -45,13 +45,15 @@ public class AssetController {
                                                            @RequestParam Optional<String> status,
                                                            @RequestParam Optional<String> statusMatchMode,
                                                            @RequestParam Optional<String> cost,
-                                                           @RequestParam Optional<String> costMatchMode) {
+                                                           @RequestParam Optional<String> costMatchMode,
+                                                           @RequestParam Optional<String> action,
+                                                           @RequestParam Optional<String> actionMatchMode) {
         EnumSet<UserRoleEnum> authorizedRoles = EnumSet.of(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.SYSTEM_ADMIN);
         if (authorizationService.isAuthorized(requestContext, authorizedRoles)) {
-            return new ResponseEntity<>(assetService.getAllAssets(pageNo, pageSize, userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode), HttpStatus.OK);
+            return new ResponseEntity<>(assetService.getAllAssets(pageNo, pageSize, userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode), HttpStatus.OK);
         } else {
             Long userId = requestContext.getUserID();
-            return new ResponseEntity<>(assetService.getAllUserAssets(userId, pageNo, pageSize, userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode), HttpStatus.OK);
+            return new ResponseEntity<>(assetService.getAllUserAssets(userId, pageNo, pageSize, userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode), HttpStatus.OK);
         }
     }
 

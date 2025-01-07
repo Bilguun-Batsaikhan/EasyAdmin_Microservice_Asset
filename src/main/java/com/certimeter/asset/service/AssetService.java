@@ -10,6 +10,8 @@ import com.certimeter.asset.repository.AssetRepository;
 import com.certimeter.asset.repository.AssetSpecification;
 import com.certimeter.asset.requestcontext.RequestContext;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.BeansException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,17 +35,17 @@ public class AssetService {
         this.requestContext = requestContext;
     }
 
-    public AssetResPagination getAllAssets(int pageNo, int pageSize, Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode) {
+    public AssetResPagination getAllAssets(int pageNo, int pageSize, Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
         Pageable pagebale = PageRequest.of(pageNo, pageSize);
-        Specification<Asset> spec = buildAssetSpecifications(userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode);
+        Specification<Asset> spec = buildAssetSpecifications(userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode);
         Page<Asset> pagedAssets = assetRepository.findAll(spec, pagebale);
 
         return buildAssetResPagination(pagedAssets, pagedAssets.getContent());
     }
 
-    public AssetResPagination getAllUserAssets(Long userId, int pageNo, int pageSize, Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode) {
+    public AssetResPagination getAllUserAssets(Long userId, int pageNo, int pageSize, Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
         Pageable pagebale = PageRequest.of(pageNo, pageSize);
-        Specification<Asset> spec = buildAssetSpecifications(userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode);
+        Specification<Asset> spec = buildAssetSpecifications(userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode);
 
         Page<Asset> pagedAssets = assetRepository.findAll(spec, pagebale);
 
@@ -71,35 +73,40 @@ public class AssetService {
                 .build();
     }
 
-    private Specification<Asset> buildAssetSpecifications(Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode) {
+    private Specification<Asset> buildAssetSpecifications(Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
         Specification<Asset> spec = Specification.where(null);
         spec = addSpecification(spec, "userID", userID, userIDMatchMode);
         spec = addSpecification(spec, "modelName", modelName, modelNameMatchMode);
         spec = addSpecification(spec, "type", type, typeMatchMode);
         spec = addSpecification(spec, "status", status, statusMatchMode);
         spec = addSpecification(spec, "cost", cost, costMatchMode);
+        spec = addSpecification(spec, "action", action, actionMatchMode);
         return spec;
     }
 
     public Asset createAsset(Asset asset) {
-        if (asset.getUserID() != null) {
-            if(asset.getStatus() == AssetStatus.UNAVAILABLE) {
-                throw new FailureException(HttpResponseEnum.INVALID_INPUT,
-                        INVALID_INPUT);
+        try {
+            if (asset.getUserID() != null) {
+                if(asset.getStatus() == AssetStatus.UNAVAILABLE) {
+                    throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                            INVALID_INPUT);
+                }
+                // Asset might've created with status AVAILABLE, but user is assigned
+                asset.setStatus(AssetStatus.ASSIGNED);
+            } else {
+                if(asset.getStatus() == AssetStatus.ASSIGNED) {
+                    throw new FailureException(HttpResponseEnum.INVALID_INPUT,
+                            "Asset must have a user assigned when status is ASSIGNED");
+                }
             }
-            // Asset might've created with status AVAILABLE, but user is assigned
-            asset.setStatus(AssetStatus.ASSIGNED);
-        } else {
-            if(asset.getStatus() == AssetStatus.ASSIGNED) {
-                throw new FailureException(HttpResponseEnum.INVALID_INPUT,
-                        "Asset must have a user assigned when status is ASSIGNED");
-            }
+
+            Asset createdAsset = assetRepository.save(asset);
+
+            logAssetHistory(createdAsset, null, AssetAction.CREATED, "Asset created [" + createdAsset.getModelName() +" - " + createdAsset.getType() + "]");
+            return createdAsset;
+        } catch (DataIntegrityViolationException e) {
+            throw new FailureException(HttpResponseEnum.FOREIGN_KEY_CONSTRAINT_VIOLATION);
         }
-
-        Asset createdAsset = assetRepository.save(asset);
-
-        logAssetHistory(createdAsset, null, AssetAction.CREATED, "Asset created");
-        return createdAsset;
     }
     //When batch updating, it might give SQL error if foreign key constraint fails
     public List<Asset> createAssets(List<Asset> assets) {
@@ -121,64 +128,76 @@ public class AssetService {
         }
         List<Asset> savedAssets = assetRepository.saveAll(newAssets);
         for (Asset savedAsset : savedAssets) {
-            logAssetHistory(savedAsset, null, AssetAction.CREATED, "Asset created");
+            logAssetHistory(savedAsset, null, AssetAction.CREATED, "Asset created [" + savedAsset.getModelName() +" - " + savedAsset.getType() + "]");
         }
         return savedAssets;
     }
 
     public Asset updateAsset(Long id, Map<String, ?> updates) {
-        Optional<Asset> optionalAsset = assetRepository.findById(id);
-        if (optionalAsset.isEmpty()) {
-            throw new FailureException(HttpResponseEnum.RESOURCE_NOT_FOUND, "Asset not found");
-        }
+        try {
+            Optional<Asset> optionalAsset = assetRepository.findById(id);
+            if (optionalAsset.isEmpty()) {
+                throw new FailureException(HttpResponseEnum.RESOURCE_NOT_FOUND, "Asset not found");
+            }
 
-        Asset asset = optionalAsset.get();
-        Asset previousState = new Asset(); // Clone asset state for history logging
-        BeanUtils.copyProperties(asset, previousState);
+            Asset asset = optionalAsset.get();
+            Asset previousState = new Asset(); // Clone asset state for history logging
+            BeanUtils.copyProperties(asset, previousState);
 
-        String statusUpdate = null;
-        Long userIdUpdate = null;
+            String statusUpdate = null;
+            Long userIdUpdate = null;
+            StringBuilder commentBuilder = new StringBuilder("Asset updated: ");
 
-        for (Map.Entry<String, ?> entry : updates.entrySet()) {
-            AssetFieldNameUpdateEnum fieldEnum = Arrays.stream(AssetFieldNameUpdateEnum.values())
-                    .filter(enumValue -> enumValue.getFieldName().equals(entry.getKey()))
-                    .findFirst()
-                    .orElseThrow(() -> new FailureException(HttpResponseEnum.INVALID_INPUT, "Invalid field name"));
+            for (Map.Entry<String, ?> entry : updates.entrySet()) {
+                AssetFieldNameUpdateEnum fieldEnum = Arrays.stream(AssetFieldNameUpdateEnum.values())
+                        .filter(enumValue -> enumValue.getFieldName().equals(entry.getKey()))
+                        .findFirst()
+                        .orElseThrow(() -> new FailureException(HttpResponseEnum.INVALID_INPUT, "Invalid field name"));
 
-            if (fieldEnum != null) {
-                switch (fieldEnum) {
-                    case STATUS:
-                        if (entry.getValue() instanceof String statusValue) {
-                            statusUpdate = statusValue;
-                        }
-                        break;
-                    case USER_ID:
-                        if (entry.getValue() instanceof String stringValue) {
-                            userIdUpdate = Long.valueOf(stringValue);
-                        } else if (entry.getValue() instanceof Number numberValue) {
-                            userIdUpdate = numberValue.longValue();
-                        }
-                        break;
-                    default:
-                        applyFieldUpdate(asset, fieldEnum, entry.getValue());
-                        break;
+                if (fieldEnum != null) {
+                    switch (fieldEnum) {
+                        case STATUS:
+                            if (entry.getValue() instanceof String statusValue) {
+                                statusUpdate = statusValue;
+                                commentBuilder.append("status changed from ").append(asset.getStatus()).append(" to ").append(statusValue).append("; ");
+                            }
+                            break;
+                        case USER_ID:
+                            if (entry.getValue() instanceof String stringValue) {
+                                userIdUpdate = Long.valueOf(stringValue);
+                            } else if (entry.getValue() instanceof Number numberValue) {
+                                userIdUpdate = numberValue.longValue();
+                            }
+                            commentBuilder.append("user ID changed to ").append(userIdUpdate).append("; ");
+                            break;
+                        default:
+                            applyFieldUpdate(asset, fieldEnum, entry.getValue());
+                            commentBuilder.append(fieldEnum.getFieldName()).append(" changed to ").append(entry.getValue()).append("; ");
+                            break;
+                    }
                 }
             }
+
+            validateAssetUpdates(asset, statusUpdate, userIdUpdate);
+
+            if (statusUpdate != null) {
+                asset.setStatus(AssetStatus.valueOf(statusUpdate));
+            }
+
+            if (userIdUpdate != null) {
+                asset.setUserID(userIdUpdate);
+            }
+
+            Asset updatedAsset = assetRepository.save(asset);
+            logAssetHistory(updatedAsset, previousState, AssetAction.UPDATED, commentBuilder.toString());
+            return updatedAsset;
+        } catch (DataIntegrityViolationException e) {
+            throw new FailureException(HttpResponseEnum.FOREIGN_KEY_CONSTRAINT_VIOLATION);
+        } catch (BeansException e) {
+            throw new RuntimeException(e);
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException(e);
         }
-
-        validateAssetUpdates(asset, statusUpdate, userIdUpdate);
-
-        if (statusUpdate != null) {
-            asset.setStatus(AssetStatus.valueOf(statusUpdate));
-        }
-
-        if (userIdUpdate != null) {
-            asset.setUserID(userIdUpdate);
-        }
-
-        Asset updatedAsset = assetRepository.save(asset);
-        logAssetHistory(updatedAsset, previousState, AssetAction.UPDATED, "Asset updated");
-        return updatedAsset;
     }
 
 
@@ -268,7 +287,7 @@ public class AssetService {
         Asset asset = optionalAsset.get();
         assetRepository.delete(asset);
 
-        logAssetHistory(asset, null, AssetAction.DELETED, "Asset deleted");
+        logAssetHistory(asset, null, AssetAction.DELETED, "Asset deleted [" + asset.getModelName() + " - " + asset.getType() + "]");
         return asset;
     }
 

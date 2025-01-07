@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.EnumSet;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/assets/history")
@@ -29,12 +30,24 @@ public class AssetHistoryController {
 
     @GetMapping
     public ResponseEntity<AssetHistoryResPagination> getAllAssetHistories(@RequestParam(value = "page", defaultValue = "0", required = false) int pageNo,
-                                                                          @RequestParam(value = "pageSize", defaultValue = "10", required = false) int pageSize) {
+                                                                          @RequestParam(value = "pageSize", defaultValue = "10", required = false) int pageSize,
+                                                                          @RequestParam Optional<String> assetId,
+                                                                          @RequestParam Optional<String> assetIdMatchMode,
+                                                                          @RequestParam Optional<String> adminId,
+                                                                          @RequestParam Optional<String> adminIdMatchMode,
+                                                                          @RequestParam Optional<String> userId,
+                                                                          @RequestParam Optional<String> userIdMatchMode,
+                                                                          @RequestParam Optional<String> status,
+                                                                          @RequestParam Optional<String> statusMatchMode,
+                                                                          @RequestParam Optional<String> date,
+                                                                          @RequestParam Optional<String> dateMatchMode,
+                                                                          @RequestParam Optional<String> action,
+                                                                          @RequestParam Optional<String> actionMatchMode) {
         EnumSet<UserRoleEnum> authorizedRoles = EnumSet.of(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.SYSTEM_ADMIN);
         if (!authorizationService.isAuthorized(requestContext, authorizedRoles)) {
             throw new FailureException(HttpResponseEnum.AUTHORIZATION_FAILED);
         }
-        return new ResponseEntity<>(assetHistoryService.getAllAssetHistories(pageNo, pageSize), HttpStatus.OK);
+        return new ResponseEntity<>(assetHistoryService.getAllAssetHistories(pageNo, pageSize, assetId, assetIdMatchMode, adminId, adminIdMatchMode, userId, userIdMatchMode, status, statusMatchMode, date, dateMatchMode, action, actionMatchMode), HttpStatus.OK);
     }
 
     @GetMapping("/{id}")
