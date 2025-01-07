@@ -33,7 +33,7 @@ public class AssetHistoryService {
         assetHistoryResPagination.setTotalPages(pagedAssetHistories.getTotalPages());
         assetHistoryResPagination.setLast(pagedAssetHistories.isLast());
 
-        assetHistoryResPagination.setAssetHistoryList(assetHistories);
+        assetHistoryResPagination.setData(assetHistories);
 
         return assetHistoryResPagination;
     }
