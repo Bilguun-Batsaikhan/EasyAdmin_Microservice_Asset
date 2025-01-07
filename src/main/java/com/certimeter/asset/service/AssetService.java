@@ -170,14 +170,10 @@ public class AssetService {
 
         if (statusUpdate != null) {
             asset.setStatus(AssetStatus.valueOf(statusUpdate));
-        } else {
-            asset.setStatus(AssetStatus.AVAILABLE);
         }
 
         if (userIdUpdate != null) {
             asset.setUserID(userIdUpdate);
-        } else {
-            asset.setUserID(null);
         }
 
         Asset updatedAsset = assetRepository.save(asset);
