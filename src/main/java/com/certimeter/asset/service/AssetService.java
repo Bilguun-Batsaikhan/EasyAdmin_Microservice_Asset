@@ -1,5 +1,6 @@
 package com.certimeter.asset.service;
 
+import com.certimeter.asset.dto.AssetDTO;
 import com.certimeter.asset.dto.AssetResPagination;
 import com.certimeter.asset.enumeration.*;
 import com.certimeter.asset.exception.FailureException;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class AssetService {
@@ -35,17 +37,17 @@ public class AssetService {
         this.requestContext = requestContext;
     }
 
-    public AssetResPagination getAllAssets(int pageNo, int pageSize, Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
+    public AssetResPagination getAllAssets(int pageNo, int pageSize, Optional<String> username, Optional<String> usernameMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
         Pageable pagebale = PageRequest.of(pageNo, pageSize);
-        Specification<Asset> spec = buildAssetSpecifications(userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode);
+        Specification<Asset> spec = buildAssetSpecifications(username, usernameMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode);
         Page<Asset> pagedAssets = assetRepository.findAll(spec, pagebale);
 
         return buildAssetResPagination(pagedAssets, pagedAssets.getContent());
     }
 
-    public AssetResPagination getAllUserAssets(Long userId, int pageNo, int pageSize, Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
+    public AssetResPagination getAllUserAssets(Long userId, int pageNo, int pageSize, Optional<String> username, Optional<String> usernameMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
         Pageable pagebale = PageRequest.of(pageNo, pageSize);
-        Specification<Asset> spec = buildAssetSpecifications(userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode);
+        Specification<Asset> spec = buildAssetSpecifications(username, usernameMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode);
 
         Page<Asset> pagedAssets = assetRepository.findAll(spec, pagebale);
 
@@ -57,7 +59,11 @@ public class AssetService {
 
         if (value.isPresent() && matchModeStr.isPresent()) {
             MatchMode matchMode = getMatchModeFromString(matchModeStr.get());
-            return spec.and(AssetSpecification.matchMode(field, value.get(), matchMode));
+            if (field.equals("username")) {
+                return spec.and(AssetSpecification.matchUsername(value.get(), matchMode));
+            } else {
+                return spec.and(AssetSpecification.matchMode(field, value.get(), matchMode));
+            }
         }
         return spec;
     }
@@ -73,9 +79,9 @@ public class AssetService {
                 .build();
     }
 
-    private Specification<Asset> buildAssetSpecifications(Optional<String> userID, Optional<String> userIDMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
+    private Specification<Asset> buildAssetSpecifications(Optional<String> username, Optional<String> usernameMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
         Specification<Asset> spec = Specification.where(null);
-        spec = addSpecification(spec, "userID", userID, userIDMatchMode);
+        spec = addSpecification(spec, "username", username, usernameMatchMode);
         spec = addSpecification(spec, "modelName", modelName, modelNameMatchMode);
         spec = addSpecification(spec, "type", type, typeMatchMode);
         spec = addSpecification(spec, "status", status, statusMatchMode);
@@ -336,6 +342,20 @@ public class AssetService {
             default:
                 throw new IllegalArgumentException("Invalid match mode: " + matchModeStr);
         }
+    }
+
+    public List<AssetDTO> findAssetsWithUserJoin() {
+        Specification<Asset> specification = AssetSpecification.joinUserOnId();
+        List<Asset> assets = assetRepository.findAll(specification);
+        return assets.stream().map(asset -> {
+            AssetDTO dto = new AssetDTO();
+            dto.setId(asset.getId());
+            dto.setModelName(asset.getModelName());
+            dto.setType(asset.getType());
+            dto.setStatus(asset.getStatus().toString());
+            dto.setUsername(asset.getUser().getUsername());
+            return dto;
+        }).collect(Collectors.toList());
     }
 }
 

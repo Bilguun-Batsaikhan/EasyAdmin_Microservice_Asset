@@ -36,4 +36,8 @@ public class Asset {
 
     @Column(name = "user_id")
     private Long userID;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id", insertable = false, updatable = false)
+    private User user;
 }

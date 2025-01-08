@@ -1,5 +1,6 @@
 package com.certimeter.asset.controller;
 
+import com.certimeter.asset.dto.AssetDTO;
 import com.certimeter.asset.dto.AssetResPagination;
 import com.certimeter.asset.enumeration.HttpResponseEnum;
 import com.certimeter.asset.enumeration.UserRoleEnum;
@@ -31,13 +32,14 @@ public class AssetController {
         this.requestContext = requestContext;
         this.authorizationService = authorizationService;
     }
+
     //--------------------------//
     //CRUD operations for Asset //
     //--------------------------//
     @GetMapping
     public ResponseEntity<AssetResPagination> getAllAssets(@RequestParam(value = "page", defaultValue = "0", required = false) int pageNo,
-                                                           @RequestParam(value = "pageSize", defaultValue = "10", required = false) int pageSize, @RequestParam Optional<String> userID,
-                                                           @RequestParam Optional<String> userIDMatchMode,
+                                                           @RequestParam(value = "pageSize", defaultValue = "10", required = false) int pageSize, @RequestParam Optional<String> username,
+                                                           @RequestParam Optional<String> usernameMatchMode,
                                                            @RequestParam Optional<String> modelName,
                                                            @RequestParam Optional<String> modelNameMatchMode,
                                                            @RequestParam Optional<String> type,
@@ -50,10 +52,10 @@ public class AssetController {
                                                            @RequestParam Optional<String> actionMatchMode) {
         EnumSet<UserRoleEnum> authorizedRoles = EnumSet.of(UserRoleEnum.SUPER_ADMIN, UserRoleEnum.SYSTEM_ADMIN);
         if (authorizationService.isAuthorized(requestContext, authorizedRoles)) {
-            return new ResponseEntity<>(assetService.getAllAssets(pageNo, pageSize, userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode), HttpStatus.OK);
+            return new ResponseEntity<>(assetService.getAllAssets(pageNo, pageSize, username, usernameMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode), HttpStatus.OK);
         } else {
             Long userId = requestContext.getUserID();
-            return new ResponseEntity<>(assetService.getAllUserAssets(userId, pageNo, pageSize, userID, userIDMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode), HttpStatus.OK);
+            return new ResponseEntity<>(assetService.getAllUserAssets(userId, pageNo, pageSize, username, usernameMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode), HttpStatus.OK);
         }
     }
 
@@ -95,5 +97,11 @@ public class AssetController {
         }
         Asset removedAsset = assetService.removeAsset(id);
         return new ResponseEntity<>(removedAsset, HttpStatus.OK);
+    }
+
+    @GetMapping("/with-user")
+    public ResponseEntity<List<AssetDTO>> getAssetsWithUserJoin() {
+        List<AssetDTO> assetDTOs = assetService.findAssetsWithUserJoin();
+        return new ResponseEntity<>(assetDTOs, HttpStatus.OK);
     }
 }

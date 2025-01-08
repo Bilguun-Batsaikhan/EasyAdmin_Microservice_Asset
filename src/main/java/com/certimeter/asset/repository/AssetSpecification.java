@@ -1,6 +1,8 @@
 package com.certimeter.asset.repository;
 
 import com.certimeter.asset.model.Asset;
+import com.certimeter.asset.model.User;
+import jakarta.persistence.criteria.Join;
 import org.springframework.data.jpa.domain.Specification;
 import com.certimeter.asset.enumeration.MatchMode;
 
@@ -35,5 +37,41 @@ public class AssetSpecification {
             default:
                 return null;
         }
+    }
+
+    public static Specification<Asset> matchUsername(String username, MatchMode matchMode) {
+        return (root, query, criteriaBuilder) -> {
+            Join<Asset, User> userJoin = root.join("user");
+            switch (matchMode) {
+                case STARTS_WITH:
+                    return criteriaBuilder.like(userJoin.get("username"), username + "%");
+                case CONTAINS:
+                    return criteriaBuilder.like(userJoin.get("username"), "%" + username + "%");
+                case NOT_CONTAINS:
+                    return criteriaBuilder.notLike(userJoin.get("username"), "%" + username + "%");
+                case ENDS_WITH:
+                    return criteriaBuilder.like(userJoin.get("username"), "%" + username);
+                case EQUALS:
+                    return criteriaBuilder.equal(userJoin.get("username"), username);
+                case NOT_EQUALS:
+                    return criteriaBuilder.notEqual(userJoin.get("username"), username);
+                default:
+                    return null;
+            }
+        };
+    }
+
+    public static Specification<Asset> joinUserOnId() {
+        return (root, query, criteriaBuilder) -> {
+            Join<Asset, User> userJoin = root.join("user");
+            query.multiselect(
+                    root.get("id"),
+                    root.get("modelName"),
+                    root.get("type"),
+                    root.get("status"),
+                    userJoin.get("username")
+            );
+            return criteriaBuilder.conjunction();
+        };
     }
 }
