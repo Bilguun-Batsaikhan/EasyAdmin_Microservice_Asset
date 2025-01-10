@@ -1,7 +1,10 @@
 package com.certimeter.asset.repository;
 
+import com.certimeter.asset.model.Asset;
 import com.certimeter.asset.model.AssetHistory;
 import com.certimeter.asset.enumeration.MatchMode;
+import com.certimeter.asset.model.User;
+import jakarta.persistence.criteria.Join;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
@@ -35,5 +38,56 @@ public class AssetHistorySpecification {
             default:
                 return null;
         }
+    }
+
+    public static Specification<AssetHistory> matchModeInJoin(String joinField, String field, String value, MatchMode matchMode) {
+        return (root, query, criteriaBuilder) -> {
+            Join<AssetHistory, ?> join = root.join(joinField);
+            switch (matchMode) {
+                case STARTS_WITH:
+                    return criteriaBuilder.like(join.get(field), value + "%");
+                case CONTAINS:
+                    return criteriaBuilder.like(join.get(field), "%" + value + "%");
+                case NOT_CONTAINS:
+                    return criteriaBuilder.notLike(join.get(field), "%" + value + "%");
+                case ENDS_WITH:
+                    return criteriaBuilder.like(join.get(field), "%" + value);
+                case EQUALS:
+                    return criteriaBuilder.equal(join.get(field), value);
+                case NOT_EQUALS:
+                    return criteriaBuilder.notEqual(join.get(field), value);
+                case DATE_BEFORE:
+                    return criteriaBuilder.lessThan(join.get(field), LocalDate.parse(value, formatter));
+                case DATE_AFTER:
+                    return criteriaBuilder.greaterThan(join.get(field), LocalDate.parse(value, formatter));
+                case DATE_IS:
+                    return criteriaBuilder.equal(join.get(field), LocalDate.parse(value, formatter));
+                case DATE_IS_NOT:
+                    return criteriaBuilder.notEqual(join.get(field), LocalDate.parse(value, formatter));
+                default:
+                    return criteriaBuilder.conjunction();
+            }
+        };
+    }
+
+
+    // This method is used to join the AssetHistory with the User and Asset tables then returns the selected fields
+    public static Specification<AssetHistory> joinAssetAndUsers() {
+        return (root, query, criteriaBuilder) -> {
+            Join<AssetHistory, User> adminJoin = root.join("admin");
+            Join<AssetHistory, User> userJoin = root.join("user");
+            Join<AssetHistory, Asset> assetJoin = root.join("asset");
+            query.multiselect(
+                    root.get("id"),
+                    assetJoin.get("modelName"),
+                    adminJoin.get("username"),
+                    userJoin.get("username"),
+                    root.get("status"),
+                    root.get("action"),
+                    root.get("date"),
+                    root.get("comment")
+            );
+            return criteriaBuilder.conjunction();
+        };
     }
 }

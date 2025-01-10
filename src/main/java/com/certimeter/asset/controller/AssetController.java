@@ -98,10 +98,4 @@ public class AssetController {
         Asset removedAsset = assetService.removeAsset(id);
         return new ResponseEntity<>(removedAsset, HttpStatus.OK);
     }
-
-    @GetMapping("/with-user")
-    public ResponseEntity<List<AssetDTO>> getAssetsWithUserJoin() {
-        List<AssetDTO> assetDTOs = assetService.findAssetsWithUserJoin();
-        return new ResponseEntity<>(assetDTOs, HttpStatus.OK);
-    }
 }

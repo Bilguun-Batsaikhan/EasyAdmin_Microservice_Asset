@@ -40,4 +40,7 @@ public class Asset {
     @ManyToOne
     @JoinColumn(name = "user_id", insertable = false, updatable = false)
     private User user;
+
+    @Column(name = "deleted")
+    private boolean deleted = false; // New field for soft delete
 }

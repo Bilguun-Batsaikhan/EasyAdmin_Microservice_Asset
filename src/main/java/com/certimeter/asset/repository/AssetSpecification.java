@@ -60,18 +60,4 @@ public class AssetSpecification {
             }
         };
     }
-
-    public static Specification<Asset> joinUserOnId() {
-        return (root, query, criteriaBuilder) -> {
-            Join<Asset, User> userJoin = root.join("user");
-            query.multiselect(
-                    root.get("id"),
-                    root.get("modelName"),
-                    root.get("type"),
-                    root.get("status"),
-                    userJoin.get("username")
-            );
-            return criteriaBuilder.conjunction();
-        };
-    }
 }
