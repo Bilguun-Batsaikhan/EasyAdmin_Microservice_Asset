@@ -37,19 +37,22 @@ public class AssetService {
         this.requestContext = requestContext;
     }
 
+    // Update the getAllAssets method to exclude deleted assets
     public AssetResPagination getAllAssets(int pageNo, int pageSize, Optional<String> username, Optional<String> usernameMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
-        Pageable pagebale = PageRequest.of(pageNo, pageSize);
+        Pageable pageable = PageRequest.of(pageNo, pageSize);
         Specification<Asset> spec = buildAssetSpecifications(username, usernameMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode);
-        Page<Asset> pagedAssets = assetRepository.findAll(spec, pagebale);
+        spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.isFalse(root.get("deleted"))); // Exclude deleted assets
+        Page<Asset> pagedAssets = assetRepository.findAll(spec, pageable);
 
         return buildAssetResPagination(pagedAssets, pagedAssets.getContent());
     }
 
+    // Update the getAllUserAssets method to exclude deleted assets
     public AssetResPagination getAllUserAssets(Long userId, int pageNo, int pageSize, Optional<String> username, Optional<String> usernameMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
-        Pageable pagebale = PageRequest.of(pageNo, pageSize);
+        Pageable pageable = PageRequest.of(pageNo, pageSize);
         Specification<Asset> spec = buildAssetSpecifications(username, usernameMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode);
-
-        Page<Asset> pagedAssets = assetRepository.findAll(spec, pagebale);
+        spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.isFalse(root.get("deleted"))); // Exclude deleted assets
+        Page<Asset> pagedAssets = assetRepository.findAll(spec, pageable);
 
         return buildAssetResPagination(pagedAssets, pagedAssets.getContent());
     }
@@ -284,6 +287,7 @@ public class AssetService {
         }
     }
 
+    // Update the removeAsset method to perform a soft delete
     public Asset removeAsset(Long id) {
         Optional<Asset> optionalAsset = assetRepository.findById(id);
         if (optionalAsset.isEmpty()) {
@@ -291,7 +295,8 @@ public class AssetService {
         }
 
         Asset asset = optionalAsset.get();
-        assetRepository.delete(asset);
+        asset.setDeleted(true); // Perform soft delete
+        assetRepository.save(asset);
 
         logAssetHistory(asset, null, AssetAction.DELETED, "Asset deleted [" + asset.getModelName() + " - " + asset.getType() + "]");
         return asset;
@@ -342,20 +347,6 @@ public class AssetService {
             default:
                 throw new IllegalArgumentException("Invalid match mode: " + matchModeStr);
         }
-    }
-
-    public List<AssetDTO> findAssetsWithUserJoin() {
-        Specification<Asset> specification = AssetSpecification.joinUserOnId();
-        List<Asset> assets = assetRepository.findAll(specification);
-        return assets.stream().map(asset -> {
-            AssetDTO dto = new AssetDTO();
-            dto.setId(asset.getId());
-            dto.setModelName(asset.getModelName());
-            dto.setType(asset.getType());
-            dto.setStatus(asset.getStatus().toString());
-            dto.setUsername(asset.getUser().getUsername());
-            return dto;
-        }).collect(Collectors.toList());
     }
 }
 

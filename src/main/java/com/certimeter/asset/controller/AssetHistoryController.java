@@ -12,7 +12,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import javax.swing.text.html.Option;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Optional;
 
 @RestController
@@ -33,10 +35,12 @@ public class AssetHistoryController {
                                                                           @RequestParam(value = "pageSize", defaultValue = "10", required = false) int pageSize,
                                                                           @RequestParam Optional<String> assetId,
                                                                           @RequestParam Optional<String> assetIdMatchMode,
-                                                                          @RequestParam Optional<String> adminId,
-                                                                          @RequestParam Optional<String> adminIdMatchMode,
-                                                                          @RequestParam Optional<String> userId,
-                                                                          @RequestParam Optional<String> userIdMatchMode,
+                                                                          @RequestParam Optional<String> modelName,
+                                                                          @RequestParam Optional<String> modelNameMatchMode,
+                                                                          @RequestParam Optional<String> admin,
+                                                                          @RequestParam Optional<String> adminMatchMode,
+                                                                          @RequestParam Optional<String> user,
+                                                                          @RequestParam Optional<String> userMatchMode,
                                                                           @RequestParam Optional<String> status,
                                                                           @RequestParam Optional<String> statusMatchMode,
                                                                           @RequestParam Optional<String> date,
@@ -47,7 +51,7 @@ public class AssetHistoryController {
         if (!authorizationService.isAuthorized(requestContext, authorizedRoles)) {
             throw new FailureException(HttpResponseEnum.AUTHORIZATION_FAILED);
         }
-        return new ResponseEntity<>(assetHistoryService.getAllAssetHistories(pageNo, pageSize, assetId, assetIdMatchMode, adminId, adminIdMatchMode, userId, userIdMatchMode, status, statusMatchMode, date, dateMatchMode, action, actionMatchMode), HttpStatus.OK);
+        return new ResponseEntity<>(assetHistoryService.getAllAssetHistories(pageNo, pageSize, assetId, assetIdMatchMode, modelName, modelNameMatchMode, admin, adminMatchMode, user, userMatchMode, status, statusMatchMode, date, dateMatchMode, action, actionMatchMode), HttpStatus.OK);
     }
 
     @GetMapping("/{id}")
