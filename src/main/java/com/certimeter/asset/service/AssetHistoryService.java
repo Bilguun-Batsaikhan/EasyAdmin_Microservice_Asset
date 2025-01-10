@@ -32,6 +32,7 @@ public class AssetHistoryService {
     public AssetHistoryResPagination getAllAssetHistories(int pageNo, int pageSize, Optional<String> assetId, Optional<String> assetIdMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> admin, Optional<String> adminMatchMode, Optional<String> user, Optional<String> userMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> date, Optional<String> dateMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
         Pageable pageable = PageRequest.of(pageNo, pageSize);
         Specification<AssetHistory> spec = buildAssetHistorySpecifications(assetId, assetIdMatchMode, modelName, modelNameMatchMode, admin, adminMatchMode, user, userMatchMode, status, statusMatchMode, date, dateMatchMode, action, actionMatchMode);
+
         Page<AssetHistory> pagedAssetHistories = assetHistoryRepository.findAll(spec, pageable);
         List<AssetHistory> assetHistories = pagedAssetHistories.getContent();
 
@@ -62,6 +63,7 @@ public class AssetHistoryService {
                 case "user":
                     return spec.and(AssetHistorySpecification.matchModeInJoin("user", "username", value.get(), matchMode));
                 default:
+                    //date "2025-01-09" dateMatchMode "dateIs"
                     return spec.and(AssetHistorySpecification.matchMode(field, value.get(), matchMode));
             }
         }

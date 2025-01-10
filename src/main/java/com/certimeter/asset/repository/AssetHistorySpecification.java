@@ -8,12 +8,14 @@ import jakarta.persistence.criteria.Join;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 public class AssetHistorySpecification {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     public static Specification<AssetHistory> matchMode(String field, String value, MatchMode matchMode) {
+        LocalDateTime dateTime = LocalDate.parse(value, formatter).atStartOfDay();
         switch (matchMode) {
             case STARTS_WITH:
                 return (root, query, criteriaBuilder) -> criteriaBuilder.like(root.get(field), value + "%");
@@ -28,19 +30,20 @@ public class AssetHistorySpecification {
             case NOT_EQUALS:
                 return (root, query, criteriaBuilder) -> criteriaBuilder.notEqual(root.get(field), value);
             case DATE_BEFORE:
-                return (root, query, criteriaBuilder) -> criteriaBuilder.lessThan(root.get(field), LocalDate.parse(value, formatter));
+                return (root, query, criteriaBuilder) -> criteriaBuilder.lessThan(root.get(field), dateTime);
             case DATE_AFTER:
-                return (root, query, criteriaBuilder) -> criteriaBuilder.greaterThan(root.get(field), LocalDate.parse(value, formatter));
+                return (root, query, criteriaBuilder) -> criteriaBuilder.greaterThan(root.get(field), dateTime);
             case DATE_IS:
-                return (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get(field), LocalDate.parse(value, formatter));
+                return (root, query, criteriaBuilder) -> criteriaBuilder.between(root.get(field), dateTime, dateTime.plusDays(1));
             case DATE_IS_NOT:
-                return (root, query, criteriaBuilder) -> criteriaBuilder.notEqual(root.get(field), LocalDate.parse(value, formatter));
+                return (root, query, criteriaBuilder) -> criteriaBuilder.not(criteriaBuilder.between(root.get(field), dateTime, dateTime.plusDays(1)));
             default:
                 return null;
         }
     }
 
     public static Specification<AssetHistory> matchModeInJoin(String joinField, String field, String value, MatchMode matchMode) {
+        LocalDateTime dateTime = LocalDate.parse(value, formatter).atStartOfDay();
         return (root, query, criteriaBuilder) -> {
             Join<AssetHistory, ?> join = root.join(joinField);
             switch (matchMode) {
@@ -57,21 +60,19 @@ public class AssetHistorySpecification {
                 case NOT_EQUALS:
                     return criteriaBuilder.notEqual(join.get(field), value);
                 case DATE_BEFORE:
-                    return criteriaBuilder.lessThan(join.get(field), LocalDate.parse(value, formatter));
+                    return criteriaBuilder.lessThan(join.get(field), dateTime);
                 case DATE_AFTER:
-                    return criteriaBuilder.greaterThan(join.get(field), LocalDate.parse(value, formatter));
+                    return criteriaBuilder.greaterThan(join.get(field), dateTime);
                 case DATE_IS:
-                    return criteriaBuilder.equal(join.get(field), LocalDate.parse(value, formatter));
+                    return criteriaBuilder.between(join.get(field), dateTime, dateTime.plusDays(1));
                 case DATE_IS_NOT:
-                    return criteriaBuilder.notEqual(join.get(field), LocalDate.parse(value, formatter));
+                    return criteriaBuilder.not(criteriaBuilder.between(join.get(field), dateTime, dateTime.plusDays(1)));
                 default:
                     return criteriaBuilder.conjunction();
             }
         };
     }
 
-
-    // This method is used to join the AssetHistory with the User and Asset tables then returns the selected fields
     public static Specification<AssetHistory> joinAssetAndUsers() {
         return (root, query, criteriaBuilder) -> {
             Join<AssetHistory, User> adminJoin = root.join("admin");
