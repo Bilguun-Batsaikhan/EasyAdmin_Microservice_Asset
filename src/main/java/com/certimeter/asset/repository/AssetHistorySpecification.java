@@ -15,7 +15,12 @@ public class AssetHistorySpecification {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     public static Specification<AssetHistory> matchMode(String field, String value, MatchMode matchMode) {
-        LocalDateTime dateTime = LocalDate.parse(value, formatter).atStartOfDay();
+        LocalDateTime dateTime;
+        if(field.equals("date")) {
+            dateTime = LocalDate.parse(value, formatter).atStartOfDay();
+        } else {
+            dateTime = null;
+        }
         switch (matchMode) {
             case STARTS_WITH:
                 return (root, query, criteriaBuilder) -> criteriaBuilder.like(root.get(field), value + "%");
@@ -43,7 +48,7 @@ public class AssetHistorySpecification {
     }
 
     public static Specification<AssetHistory> matchModeInJoin(String joinField, String field, String value, MatchMode matchMode) {
-        LocalDateTime dateTime = LocalDate.parse(value, formatter).atStartOfDay();
+        //LocalDateTime dateTime = LocalDate.parse(value, formatter).atStartOfDay();
         return (root, query, criteriaBuilder) -> {
             Join<AssetHistory, ?> join = root.join(joinField);
             switch (matchMode) {
@@ -59,14 +64,14 @@ public class AssetHistorySpecification {
                     return criteriaBuilder.equal(join.get(field), value);
                 case NOT_EQUALS:
                     return criteriaBuilder.notEqual(join.get(field), value);
-                case DATE_BEFORE:
-                    return criteriaBuilder.lessThan(join.get(field), dateTime);
-                case DATE_AFTER:
-                    return criteriaBuilder.greaterThan(join.get(field), dateTime);
-                case DATE_IS:
-                    return criteriaBuilder.between(join.get(field), dateTime, dateTime.plusDays(1));
-                case DATE_IS_NOT:
-                    return criteriaBuilder.not(criteriaBuilder.between(join.get(field), dateTime, dateTime.plusDays(1)));
+//                case DATE_BEFORE:
+//                    return criteriaBuilder.lessThan(join.get(field), dateTime);
+//                case DATE_AFTER:
+//                    return criteriaBuilder.greaterThan(join.get(field), dateTime);
+//                case DATE_IS:
+//                    return criteriaBuilder.between(join.get(field), dateTime, dateTime.plusDays(1));
+//                case DATE_IS_NOT:
+//                    return criteriaBuilder.not(criteriaBuilder.between(join.get(field), dateTime, dateTime.plusDays(1)));
                 default:
                     return criteriaBuilder.conjunction();
             }

@@ -1,6 +1,5 @@
 package com.certimeter.asset.controller;
 
-import com.certimeter.asset.dto.AssetDTO;
 import com.certimeter.asset.dto.AssetResPagination;
 import com.certimeter.asset.enumeration.HttpResponseEnum;
 import com.certimeter.asset.enumeration.UserRoleEnum;

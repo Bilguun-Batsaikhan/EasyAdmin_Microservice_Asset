@@ -1,6 +1,5 @@
 package com.certimeter.asset.service;
 
-import com.certimeter.asset.dto.AssetDTO;
 import com.certimeter.asset.dto.AssetResPagination;
 import com.certimeter.asset.enumeration.*;
 import com.certimeter.asset.exception.FailureException;
@@ -22,7 +21,6 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class AssetService {
@@ -31,6 +29,7 @@ public class AssetService {
     private final AssetHistoryRepository assetHistoryRepository;
     private final RequestContext requestContext;
     private static final String INVALID_INPUT = "Asset cannot have a user assigned when status is UNAVAILABLE";
+
     public AssetService(AssetRepository assetRepository, AssetHistoryRepository assetHistoryRepository, RequestContext requestContext) {
         this.assetRepository = assetRepository;
         this.assetHistoryRepository = assetHistoryRepository;
@@ -47,11 +46,11 @@ public class AssetService {
         return buildAssetResPagination(pagedAssets, pagedAssets.getContent());
     }
 
-    // Update the getAllUserAssets method to exclude deleted assets
     public AssetResPagination getAllUserAssets(Long userId, int pageNo, int pageSize, Optional<String> username, Optional<String> usernameMatchMode, Optional<String> modelName, Optional<String> modelNameMatchMode, Optional<String> type, Optional<String> typeMatchMode, Optional<String> status, Optional<String> statusMatchMode, Optional<String> cost, Optional<String> costMatchMode, Optional<String> action, Optional<String> actionMatchMode) {
         Pageable pageable = PageRequest.of(pageNo, pageSize);
         Specification<Asset> spec = buildAssetSpecifications(username, usernameMatchMode, modelName, modelNameMatchMode, type, typeMatchMode, status, statusMatchMode, cost, costMatchMode, action, actionMatchMode);
         spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.isFalse(root.get("deleted"))); // Exclude deleted assets
+        spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("userID"), userId)); // Filter by userId
         Page<Asset> pagedAssets = assetRepository.findAll(spec, pageable);
 
         return buildAssetResPagination(pagedAssets, pagedAssets.getContent());
@@ -96,14 +95,14 @@ public class AssetService {
     public Asset createAsset(Asset asset) {
         try {
             if (asset.getUserID() != null) {
-                if(asset.getStatus() == AssetStatus.UNAVAILABLE) {
+                if (asset.getStatus() == AssetStatus.UNAVAILABLE) {
                     throw new FailureException(HttpResponseEnum.INVALID_INPUT,
                             INVALID_INPUT);
                 }
                 // Asset might've created with status AVAILABLE, but user is assigned
                 asset.setStatus(AssetStatus.ASSIGNED);
             } else {
-                if(asset.getStatus() == AssetStatus.ASSIGNED) {
+                if (asset.getStatus() == AssetStatus.ASSIGNED) {
                     throw new FailureException(HttpResponseEnum.INVALID_INPUT,
                             "Asset must have a user assigned when status is ASSIGNED");
                 }
@@ -111,12 +110,13 @@ public class AssetService {
 
             Asset createdAsset = assetRepository.save(asset);
 
-            logAssetHistory(createdAsset, null, AssetAction.CREATED, "Asset created [" + createdAsset.getModelName() +" - " + createdAsset.getType() + "]");
+            logAssetHistory(createdAsset, null, AssetAction.CREATED, "Asset created [" + createdAsset.getModelName() + " - " + createdAsset.getType() + "]");
             return createdAsset;
         } catch (DataIntegrityViolationException e) {
             throw new FailureException(HttpResponseEnum.FOREIGN_KEY_CONSTRAINT_VIOLATION);
         }
     }
+
     //When batch updating, it might give SQL error if foreign key constraint fails
     public List<Asset> createAssets(List<Asset> assets) {
         List<Asset> newAssets = new ArrayList<>();
@@ -137,7 +137,7 @@ public class AssetService {
         }
         List<Asset> savedAssets = assetRepository.saveAll(newAssets);
         for (Asset savedAsset : savedAssets) {
-            logAssetHistory(savedAsset, null, AssetAction.CREATED, "Asset created [" + savedAsset.getModelName() +" - " + savedAsset.getType() + "]");
+            logAssetHistory(savedAsset, null, AssetAction.CREATED, "Asset created [" + savedAsset.getModelName() + " - " + savedAsset.getType() + "]");
         }
         return savedAssets;
     }
@@ -168,7 +168,9 @@ public class AssetService {
                         case STATUS:
                             if (entry.getValue() instanceof String statusValue) {
                                 statusUpdate = statusValue;
-                                commentBuilder.append("status changed from ").append(asset.getStatus()).append(" to ").append(statusValue).append("; ");
+                                if (!statusUpdate.equals(asset.getStatus().name())) {
+                                    commentBuilder.append("status changed from ").append(asset.getStatus()).append(" to ").append(statusValue).append("; ");
+                                }
                             }
                             break;
                         case USER_ID:
@@ -177,12 +179,30 @@ public class AssetService {
                             } else if (entry.getValue() instanceof Number numberValue) {
                                 userIdUpdate = numberValue.longValue();
                             }
-                            commentBuilder.append("user ID changed to ").append(userIdUpdate).append("; ");
+                            if (asset.getUserID() != null && !Objects.equals(userIdUpdate, asset.getUserID())) {
+                                commentBuilder.append("user ID changed from ").append(asset.getUserID()).append(" to ").append(userIdUpdate).append("; ");
+                            }
+
                             break;
                         default:
-                            applyFieldUpdate(asset, fieldEnum, entry.getValue());
-                            commentBuilder.append(fieldEnum.getFieldName()).append(" changed to ").append(entry.getValue()).append("; ");
+                            Object currentValue = getFieldValue(asset, fieldEnum);
+                            Object newValue = entry.getValue();
+
+                            //System.out.println("The type of obj is: " + newValue.getClass().getName());
+
+                            if (currentValue instanceof BigDecimal && newValue instanceof Integer) {
+                                // Convert Integer to BigDecimal for comparison
+                                BigDecimal newCost = BigDecimal.valueOf((Integer) newValue);
+                                if (((BigDecimal) currentValue).compareTo(newCost) != 0) {
+                                    applyFieldUpdate(asset, fieldEnum, newCost);
+                                    commentBuilder.append(fieldEnum.getFieldName()).append(" from ").append(currentValue).append(" changed to ").append(newCost).append("; ");
+                                }
+                            } else if (!Objects.equals(currentValue, newValue)) {
+                                applyFieldUpdate(asset, fieldEnum, newValue);
+                                commentBuilder.append(fieldEnum.getFieldName()).append(" from ").append(currentValue).append(" changed to ").append(newValue).append("; ");
+                            }
                             break;
+
                     }
                 }
             }
@@ -209,6 +229,18 @@ public class AssetService {
         }
     }
 
+    private Object getFieldValue(Asset asset, AssetFieldNameUpdateEnum fieldEnum) {
+        switch (fieldEnum) {
+            case NAME:
+                return asset.getModelName();
+            case TYPE:
+                return asset.getType();
+            case PRICE:
+                return asset.getCost();
+            default:
+                throw new FailureException(HttpResponseEnum.INVALID_INPUT, "Unsupported field: " + fieldEnum.name());
+        }
+    }
 
     private void validateAssetUpdates(Asset asset, String statusUpdate, Long userIdUpdate) {
         if (statusUpdate != null && userIdUpdate != null) {
@@ -245,6 +277,7 @@ public class AssetService {
                     "Asset must have a user assigned, the user is: " + asset.getUserID());
         }
     }
+
     /*
     * When only modifying user_id:
 -if status is ASSIGNED then that shouldn't be a problem since that means the previous user is no longer the owner.
@@ -313,12 +346,13 @@ public class AssetService {
         history.setDate(LocalDateTime.now());
         history.setComment(comment);
 
-        if (action == AssetAction.UPDATED && previousAsset != null) {
+        if (action == AssetAction.UPDATED && previousAsset != null && !previousAsset.getStatus().equals(currentAsset.getStatus())) {
             history.setComment(comment + " - Previous status: " + previousAsset.getStatus());
         }
 
         assetHistoryRepository.save(history);
     }
+
     // this could be in a common shared library
     private MatchMode getMatchModeFromString(String matchModeStr) {
         switch (matchModeStr.toLowerCase()) {
