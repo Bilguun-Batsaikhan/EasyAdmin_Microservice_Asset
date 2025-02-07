@@ -378,6 +378,14 @@ public class AssetService {
                 return MatchMode.DATE_BEFORE;
             case "dateafter":
                 return MatchMode.DATE_AFTER;
+            case "gt":
+                return MatchMode.GREATER_THAN;
+            case "lt":
+                return MatchMode.LESS_THAN;
+            case "gte":
+                return MatchMode.GREATER_THAN_OR_EQUALS;
+            case "lte":
+                return MatchMode.LESS_THAN_OR_EQUALS;
             default:
                 throw new IllegalArgumentException("Invalid match mode: " + matchModeStr);
         }

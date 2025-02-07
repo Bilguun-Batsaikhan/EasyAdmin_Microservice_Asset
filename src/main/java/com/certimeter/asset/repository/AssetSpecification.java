@@ -26,6 +26,14 @@ public class AssetSpecification {
                 return (root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get(field), value);
             case NOT_EQUALS:
                 return (root, query, criteriaBuilder) -> criteriaBuilder.notEqual(root.get(field), value);
+            case GREATER_THAN:
+                return (root, query, criteriaBuilder) -> criteriaBuilder.greaterThan(root.get(field), value);
+            case LESS_THAN:
+                return (root, query, criteriaBuilder) -> criteriaBuilder.lessThan(root.get(field), value);
+            case GREATER_THAN_OR_EQUALS:
+                return (root, query, criteriaBuilder) -> criteriaBuilder.greaterThanOrEqualTo(root.get(field), value);
+            case LESS_THAN_OR_EQUALS:
+                return (root, query, criteriaBuilder) -> criteriaBuilder.lessThanOrEqualTo(root.get(field), value);
             case DATE_BEFORE:
                 return (root, query, criteriaBuilder) -> criteriaBuilder.lessThan(root.get(field), LocalDate.parse(value, formatter));
             case DATE_AFTER:
