@@ -329,9 +329,11 @@ public class AssetService {
 
         Asset asset = optionalAsset.get();
         asset.setDeleted(true); // Perform soft delete
-        assetRepository.save(asset);
+
 
         logAssetHistory(asset, null, AssetAction.DELETED, "Asset deleted [" + asset.getModelName() + " - " + asset.getType() + "]");
+        asset.setUserID(null);
+        assetRepository.save(asset);
         return asset;
     }
 
